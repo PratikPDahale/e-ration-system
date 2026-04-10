@@ -1,0 +1,6 @@
+fps_id,city_code,region_code,center_type,op_area
+FPS_001,C001,R1,Urban,7
+FPS_002,C002,R2,Rural,5
+FPS_003,C003,R3,Urban,16
+FPS_004,C004,R1,Rural,19
+FPS_005,C005,R2,Urban,12

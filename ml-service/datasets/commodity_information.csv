@@ -1,0 +1,4 @@
+commodity,category,allotment_price,base_price,allotment_quantity_per_family
+Rice,Cereal,3,20,35
+Wheat,Cereal,2,18,30
+Sugar,Sugar,13,35,5
