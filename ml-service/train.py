@@ -53,22 +53,42 @@ def prepare_data():
     df = df.merge(socio, on='date', how='left')
     df = df.merge(temporal, on='date', how='left')
 
-    # --- INJECTING MEMORY (LAG FEATURES) ---
-    # This helps the model see what happened last month to predict this month
-    df = df.sort_values(['fps_id', 'commodity', 'date'])
-    df['prev_month_demand'] = df.groupby(['fps_id', 'commodity'])['quantity_distributed'].shift(1)
-    df = df.fillna(0) 
-
-    # 5. FEATURE ENGINEERING
+    # Extract year and month for grouping
     df['month'] = df['date'].dt.month
     df['year'] = df['date'].dt.year
-    df = df.ffill().bfill()
-    # ADD beneficiary_class here!
-    df = pd.get_dummies(df, columns=['fps_id', 'commodity', 'city_code', 'beneficiary_class'])
+
+    # --- FIX 1: AGGREGATE DAILY DATA TO MONTHLY TOTALS ---
+    # Grouping by month and summing the quantity distributed solves the 60-70kg scale issue.
+    # We take the average (mean) or peak (max) for environmental/socio-economic variables.
+    df_monthly = df.groupby(['year', 'month', 'fps_id', 'commodity', 'beneficiary_class', 'city_code']).agg({
+        'quantity_distributed': 'sum',
+        'avg_rainfall': 'mean',
+        'avg_temperature': 'mean',
+        'disaster_flag': 'max',
+        'local_unemployment_rate': 'mean',
+        'local_CPI': 'mean',
+        'mandi_commodity_price': 'mean',
+        'local_wage_rate': 'mean',
+        'is_festival_holiday': 'max',
+        'is_end_of_month': 'max'
+    }).reset_index()
+
+    # --- FIX 2: CORRECTED MEMORY (LAG FEATURES) ---
+    # Now that the data is aggregated by month, .shift(1) properly grabs the previous month's total demand
+    df_monthly = df_monthly.sort_values(['fps_id', 'commodity', 'beneficiary_class', 'year', 'month'])
+    df_monthly['prev_month_demand'] = df_monthly.groupby(['fps_id', 'commodity', 'beneficiary_class'])['quantity_distributed'].shift(1)
+    df_monthly = df_monthly.fillna(0) 
+
+    # 5. FEATURE ENGINEERING
+    # Apply one-hot encoding on the monthly aggregated dataset
+    df_encoded = pd.get_dummies(df_monthly, columns=['fps_id', 'commodity', 'city_code', 'beneficiary_class'])
     
     # 6. TRAINING PREPARATION
-    X = df.drop(['date', 'quantity_distributed', 'major_govt_announcement'], axis=1)
-    y = df['quantity_distributed']
+    X = df_encoded.drop(['quantity_distributed'], axis=1)
+    if 'major_govt_announcement' in X.columns:
+        X = X.drop(['major_govt_announcement'], axis=1)
+        
+    y = df_encoded['quantity_distributed']
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
